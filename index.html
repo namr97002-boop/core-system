@@ -3516,7 +3516,7 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
 // ==================== دوال النسخ الاحتياطي المصححة والكاملة ====================
 
 // 1. تعريف الرابط (تأكد أنه لا يتكرر في مكان آخر في ملفك)
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzTbi9mJCHSdWGGqnhqg1dr_F84MQj8zPmrTuX8PDSOm17ldOwXrCHBn30BPW0Rxl72/exec';
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzwK68SfaC_Rq0xJNiOicFSQckYRL_S6lurvIdHW6CywjSRuON8nwanjFh1bRyoMlRl/exec';
 
 // دالة مساعدة لجلب كافة البيانات من التخزين المحلي
 async function getAllProjectData() {
@@ -7479,6 +7479,161 @@ function toggleSectionExclusive(sectionId) {
         }
     });
 }
+</script>
+<script>
+// ==================== نظام البحث المتقدم ====================
+(function() {
+    'use strict';
+    
+    // دالة تحويل Select إلى Searchable
+    function makeSearchableSelect(selectId, placeholderText) {
+        const select = document.getElementById(selectId);
+        if (!select) return null;
+        
+        // تجنب إضافة البحث مرتين
+        if (select.parentElement.querySelector('.search-input-for-' + selectId)) return;
+        
+        const container = select.parentElement;
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = placeholderText || '🔍 بحث...';
+        searchInput.className = 'search-input-for-' + selectId;
+        searchInput.style.cssText = 'width:100%; padding:10px; margin-bottom:10px; border-radius:40px; border:1px solid #d4af37; background:#222; color:#fff; font-size:14px;';
+        
+        select.style.display = 'none';
+        container.insertBefore(searchInput, select);
+        
+        let originalOptions = [];
+        
+        function updateOptions() {
+            originalOptions = [];
+            for (let i = 0; i < select.options.length; i++) {
+                const opt = select.options[i];
+                originalOptions.push({
+                    value: opt.value,
+                    text: opt.text,
+                    phone: opt.dataset.phone || '',
+                    name: opt.dataset.name || '',
+                    balance: opt.dataset.balance || '0'
+                });
+            }
+        }
+        
+        function filterOptions() {
+            const term = searchInput.value.toLowerCase();
+            select.innerHTML = '';
+            
+            const filtered = originalOptions.filter(opt => 
+                opt.text.toLowerCase().includes(term)
+            );
+            
+            filtered.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.text = opt.text;
+                if (opt.phone) option.dataset.phone = opt.phone;
+                if (opt.name) option.dataset.name = opt.name;
+                if (opt.balance) option.dataset.balance = opt.balance;
+                select.appendChild(option);
+            });
+            
+            if (filtered.length === 1 && term !== '') {
+                select.value = filtered[0].value;
+                if (typeof select.onchange === 'function') select.onchange();
+            }
+        }
+        
+        const observer = new MutationObserver(updateOptions);
+        observer.observe(select, { childList: true, subtree: true });
+        
+        updateOptions();
+        searchInput.addEventListener('input', filterOptions);
+        
+        return searchInput;
+    }
+    
+    // دالة البحث في جدول المنتجات (تعديل الأسعار)
+    function addProductTableSearch() {
+        const modal = document.getElementById('priceManagerModal');
+        if (!modal) return;
+        
+        if (modal.querySelector('.product-table-search')) return;
+        
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = '🔍 بحث عن صنف...';
+        searchInput.className = 'product-table-search';
+        searchInput.style.cssText = 'width:100%; padding:12px; margin-bottom:15px; border-radius:40px; border:1px solid #d4af37; background:#222; color:#fff; font-size:14px;';
+        
+        const title = modal.querySelector('h3');
+        if (title) {
+            title.insertAdjacentElement('afterend', searchInput);
+        } else {
+            modal.querySelector('.glass-card')?.insertBefore(searchInput, modal.querySelector('.glass-card').firstChild);
+        }
+        
+        searchInput.addEventListener('input', function() {
+            const term = this.value.toLowerCase();
+            const rows = document.querySelectorAll('#priceTableBody tr');
+            rows.forEach(row => {
+                const nameCell = row.cells[0];
+                if (nameCell && nameCell.innerText.toLowerCase().includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+    
+    // تعديل دالة setupInvoice
+    const originalSetupInvoice = window.setupInvoice;
+    if (originalSetupInvoice) {
+        window.setupInvoice = function(type, mode) {
+            originalSetupInvoice(type, mode);
+            setTimeout(() => {
+                makeSearchableSelect('prodSelect', '🔍 بحث عن صنف...');
+                makeSearchableSelect('conSelect', '🔍 بحث عن عميل/مورد...');
+            }, 200);
+        };
+    }
+    
+    // تعديل دالة openPaymentModal
+    const originalOpenPayment = window.openPaymentModal;
+    if (originalOpenPayment) {
+        window.openPaymentModal = function(type) {
+            originalOpenPayment(type);
+            setTimeout(() => {
+                makeSearchableSelect('paymentContactSelect', '🔍 بحث عن اسم...');
+            }, 200);
+        };
+    }
+    
+    // تعديل دالة openPriceManager
+    const originalOpenPrice = window.openPriceManager;
+    if (originalOpenPrice) {
+        window.openPriceManager = async function() {
+            if (originalOpenPrice) await originalOpenPrice();
+            setTimeout(addProductTableSearch, 300);
+        };
+    }
+    
+    // تشغيل البحث عند تحميل أي نافذة فاتورة موجودة مسبقاً
+    setInterval(() => {
+        if (document.getElementById('invoiceModal') && document.getElementById('invoiceModal').style.display === 'block') {
+            makeSearchableSelect('prodSelect', '🔍 بحث عن صنف...');
+            makeSearchableSelect('conSelect', '🔍 بحث عن عميل/مورد...');
+        }
+        if (document.getElementById('paymentModal') && document.getElementById('paymentModal').style.display === 'block') {
+            makeSearchableSelect('paymentContactSelect', '🔍 بحث عن اسم...');
+        }
+        if (document.getElementById('priceManagerModal') && document.getElementById('priceManagerModal').style.display === 'block') {
+            addProductTableSearch();
+        }
+    }, 1000);
+    
+    console.log('✅ نظام البحث التلقائي تم تفعيله');
+})();
 </script>
 </body>
 </html>
