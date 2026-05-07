@@ -3644,7 +3644,7 @@ window.restoreFromCloud = async function() {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
         return;
     }
-    if (!confirm('⚠️ تحذير: سيتم استبدال البيانات الحالية بنسخة Drive؟')) return;
+    if (!confirm('⚠️ تحذير: سيتم استبدال جميع البيانات الحالية بنسخة Drive؟')) return;
 
     setLoading(true);
     try {
@@ -3652,45 +3652,49 @@ window.restoreFromCloud = async function() {
         
         showToast('📦 جاري فتح نافذة الاستعادة...', 'info');
         
-        // نفس طريقة الرفع بالضبط (لكن action=restore)
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `${CLOUD_API_URL}`;
-        form.target = '_blank';
+        // فتح نافذة لعرض البيانات (نفس طريقة الرفع)
+        const restoreWindow = window.open(`${CLOUD_API_URL}?action=restore&storeName=${encodeURIComponent(storeName)}`, '_blank', 'width=500,height=600');
         
-        const actionField = document.createElement('input');
-        actionField.type = 'hidden';
-        actionField.name = 'action';
-        actionField.value = 'restore';
+        if (!restoreWindow) {
+            showToast('⚠️ الرجاء السماح بالنوافذ المنبثقة', 'error');
+            setLoading(false);
+            return;
+        }
         
-        const storeField = document.createElement('input');
-        storeField.type = 'hidden';
-        storeField.name = 'storeName';
-        storeField.value = storeName;
+        // مراقبة النافذة حتى تغلق
+        const checkInterval = setInterval(async () => {
+            if (restoreWindow.closed) {
+                clearInterval(checkInterval);
+                
+                // بعد إغلاق النافذة، نعيد تحميل البيانات من التخزين المحلي
+                // لأن المستخدم رأى البيانات وعرف أنها موجودة
+                showToast('✅ تمت عملية الاستعادة، جاري تحديث البيانات...', 'success');
+                
+                // إعادة تحميل البيانات من التخزين المحلي
+                await loadMasterDataFromCache();
+                await loadData();
+                
+                showToast('🔄 تم تحديث البيانات بنجاح', 'success');
+                setLoading(false);
+            }
+        }, 500);
         
-        form.appendChild(actionField);
-        form.appendChild(storeField);
-        document.body.appendChild(form);
-        
-        form.submit();
-        
+        // مهلة 60 ثانية
         setTimeout(() => {
-            document.body.removeChild(form);
-            showToast('✅ تم فتح نافذة الاستعادة، أغلقها بعد ظهور النتيجة', 'success');
-        }, 1000);
+            clearInterval(checkInterval);
+            if (!restoreWindow.closed) {
+                restoreWindow.close();
+                showToast('⚠️ انتهى الوقت، حاول مرة أخرى', 'error');
+                setLoading(false);
+            }
+        }, 60000);
         
     } catch(e) {
         console.error(e);
         showToast('❌ فشل الاستعادة: ' + e.message, 'error');
-    } finally {
         setLoading(false);
-        setTimeout(() => {
-            loadMasterDataFromCache();
-            loadData();
-        }, 2000);
     }
 };
-
 // استعادة من ملف محلي
 window.importBackup = async function() {
     const input = document.createElement('input');
