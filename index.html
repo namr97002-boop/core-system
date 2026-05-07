@@ -3513,19 +3513,25 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
         } catch (e) { showToast('خطأ: ' + e.message, 'error'); }
         setLoading(false);
     }
-// ==================== دوال النسخ الاحتياطي المصححة والكاملة ====================
+// ==================== النسخ الاحتياطي مع تذكر الإذن (مرة واحدة فقط) ====================
 
-// 1. تعريف الرابط (تأكد أنه لا يتكرر في مكان آخر في ملفك)
 const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzwK68SfaC_Rq0xJNiOicFSQckYRL_S6lurvIdHW6CywjSRuON8nwanjFh1bRyoMlRl/exec';
+const TOKEN_STORAGE_KEY = 'drive_permission_granted';
 
-// دالة مساعدة لجلب كافة البيانات من التخزين المحلي
+function isPermissionGranted() {
+    return localStorage.getItem(TOKEN_STORAGE_KEY) === 'true';
+}
+
+function setPermissionGranted() {
+    localStorage.setItem(TOKEN_STORAGE_KEY, 'true');
+}
+
 async function getAllProjectData() {
     const getAllFromStore = async (store) => {
         const keys = await store.keys();
         const items = await Promise.all(keys.map(k => store.getItem(k)));
         return items.filter(item => item !== null);
     };
-
     const [products, contacts, invoices, items, payments] = await Promise.all([
         getAllFromStore(productsStore),
         getAllFromStore(contactsStore),
@@ -3533,20 +3539,30 @@ async function getAllProjectData() {
         getAllFromStore(invoiceItemsStore),
         getAllFromStore(paymentsStore)
     ]);
-
-    return { 
-        version: '2.0', 
-        date: new Date().toISOString(), 
-        products, 
-        contacts, 
-        invoices, 
-        invoice_items: items, 
-        payments 
-    };
+    return { products, contacts, invoices, invoice_items: items, payments };
 }
 
-// 2. تصدير نسخة احتياطية محلية (ملف JSON)
-async function exportBackup() {
+async function applyBackupData(data) {
+    const storeMap = [
+        { store: productsStore, items: data.products },
+        { store: contactsStore, items: data.contacts },
+        { store: invoicesStore, items: data.invoices },
+        { store: invoiceItemsStore, items: data.invoice_items },
+        { store: paymentsStore, items: data.payments }
+    ];
+    for (const entry of storeMap) {
+        if (entry.items && Array.isArray(entry.items)) {
+            await entry.store.clear();
+            for (const item of entry.items) {
+                if (item && item.id) await entry.store.setItem(item.id, item);
+            }
+        }
+    }
+    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
+}
+
+// تصدير نسخة محلية
+window.exportBackup = async function() {
     setLoading(true);
     try {
         const backup = await getAllProjectData();
@@ -3558,88 +3574,125 @@ async function exportBackup() {
         a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast('✅ تم حفظ النسخة المحلية بنجاح', 'success');
+        showToast('✅ تم حفظ النسخة المحلية', 'success');
     } catch (e) {
-        showToast('❌ خطأ في التصدير المحلي: ' + e.message, 'error');
+        showToast('❌ خطأ: ' + e.message, 'error');
     } finally {
         setLoading(false);
     }
-}
+};
 
-// 3. رفع نسخة إلى Drive (معدلة لتعمل مع السكربت المتطور)
-async function backupToDrive() {
+// رفع إلى Drive - طريقة متوافقة مع السكربت الخلفي
+window.backupToDrive = async function() {
     if (!navigator.onLine) {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
         return;
     }
     setLoading(true);
     try {
-        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
         const backup = await getAllProjectData();
-
-        // استخدام POST لإرسال الأكشن والبيانات
-        await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            mode: 'no-cors', // لضمان تجاوز قيود CORS أثناء الرفع
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'upload', backup: backup })
-        });
-
-        // في وضع no-cors نفترض النجاح إذا لم يحدث خطأ في الاتصال
-        showToast('✅ تم إرسال النسخة إلى Drive بنجاح', 'success');
+        const backupString = JSON.stringify(backup, null, 2);
+        const storeName = localStorage.getItem('storeName') || 'نظامي';
+        const filename = `backup_${storeName}.json`;
+        
+        showToast('📦 جاري فتح نافذة الرفع...', 'info');
+        
+        // إنشاء نموذج بنفس أسماء الحقول التي ينتظرها السكربت
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `${CLOUD_API_URL}?action=upload`;
+        form.target = '_blank';
+        
+        // حقول متطابقة مع ما يقرأه السكربت (e.parameter)
+        const dataField = document.createElement('input');
+        dataField.type = 'hidden';
+        dataField.name = 'data';
+        dataField.value = backupString;
+        
+        const nameField = document.createElement('input');
+        nameField.type = 'hidden';
+        nameField.name = 'filename';
+        nameField.value = filename;
+        
+        const storeField = document.createElement('input');
+        storeField.type = 'hidden';
+        storeField.name = 'storeName';
+        storeField.value = storeName;
+        
+        form.appendChild(dataField);
+        form.appendChild(nameField);
+        form.appendChild(storeField);
+        document.body.appendChild(form);
+        
+        form.submit();
+        
+        setTimeout(() => {
+            document.body.removeChild(form);
+            showToast('✅ تم فتح نافذة الرفع، أغلقها بعد ظهور رسالة النجاح', 'success');
+        }, 1000);
+        
     } catch(e) {
-        console.error("خطأ الرفع:", e);
-        showToast("❌ فشل الرفع: " + e.message, "error");
+        console.error(e);
+        showToast('❌ فشل الرفع: ' + e.message, 'error');
     } finally {
         setLoading(false);
     }
-}
-
-// 4. استعادة من Drive (معدلة جذرياً لحل مشكلة "لا توجد نسخة")
-async function restoreFromCloud() {
+};
+// استعادة من Drive (نفس طريقة الرفع)
+window.restoreFromCloud = async function() {
     if (!navigator.onLine) {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
         return;
     }
-    if (!confirm('⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة Drive؟')) return;
+    if (!confirm('⚠️ تحذير: سيتم استبدال البيانات الحالية بنسخة Drive؟')) return;
 
     setLoading(true);
     try {
-        showToast('☁️ جاري طلب البيانات من Drive...', 'info');
+        const storeName = localStorage.getItem('storeName') || 'نظامي';
         
-        // إرسال طلب POST لأن السكربت يعالج الأكشن في doPost
-        const response = await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            redirect: 'follow',
-            body: JSON.stringify({ action: 'restore' })
-        });
-
-        const text = await response.text();
+        showToast('📦 جاري فتح نافذة الاستعادة...', 'info');
         
-        // فحص إذا كان الرد HTML (صفحة خطأ من جوجل) لمنع خطأ الـ Token
-        if (text.trim().startsWith('<')) {
-            throw new Error("رد غير صالح من الخادم. تأكد من إعدادات النشر على (Anyone).");
-        }
-
-        const result = JSON.parse(text);
-
-        if (result.status === 'success' && result.data) {
-            await applyBackupData(result.data);
-            showToast(`✅ تم استعادة البيانات بنجاح`, 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('⚠️ ' + (result.message || 'لم يتم العثور على نسخة'), 'error');
-        }
+        // نفس طريقة الرفع بالضبط (لكن action=restore)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `${CLOUD_API_URL}`;
+        form.target = '_blank';
+        
+        const actionField = document.createElement('input');
+        actionField.type = 'hidden';
+        actionField.name = 'action';
+        actionField.value = 'restore';
+        
+        const storeField = document.createElement('input');
+        storeField.type = 'hidden';
+        storeField.name = 'storeName';
+        storeField.value = storeName;
+        
+        form.appendChild(actionField);
+        form.appendChild(storeField);
+        document.body.appendChild(form);
+        
+        form.submit();
+        
+        setTimeout(() => {
+            document.body.removeChild(form);
+            showToast('✅ تم فتح نافذة الاستعادة، أغلقها بعد ظهور النتيجة', 'success');
+        }, 1000);
+        
     } catch(e) {
-        console.error('خطأ الاستعادة:', e);
-        showToast('❌ فشل الاستعادة: تأكد من وجود ملف النسخة في درايف', 'error');
+        console.error(e);
+        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
     } finally {
         setLoading(false);
+        setTimeout(() => {
+            loadMasterDataFromCache();
+            loadData();
+        }, 2000);
     }
-}
+};
 
-// 5. استعادة من ملف محلي
-async function importBackup() {
+// استعادة من ملف محلي
+window.importBackup = async function() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -3661,36 +3714,13 @@ async function importBackup() {
         }
     };
     input.click();
-}
+};
 
-// دالة مساعدة لتطبيق البيانات على المخازن
-async function applyBackupData(data) {
-    const storeMap = [
-        { store: productsStore, items: data.products },
-        { store: contactsStore, items: data.contacts },
-        { store: invoicesStore, items: data.invoices },
-        { store: invoiceItemsStore, items: data.invoice_items },
-        { store: paymentsStore, items: data.payments }
-    ];
-
-    for (const entry of storeMap) {
-        if (entry.items) {
-            await entry.store.clear();
-            for (const item of entry.items) {
-                await entry.store.setItem(item.id, item);
-            }
-        }
-    }
-    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
-}
-
-// ربط الدوال بالمتصفح
-window.exportBackup = exportBackup;
-window.backupToDrive = backupToDrive;
-window.restoreFromCloud = restoreFromCloud;
-window.importBackup = importBackup;
-
-
+// إعادة تعيين الإذن
+window.resetDrivePermission = function() {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    showToast('✅ تم إعادة تعيين الإذن - سيطلب منك تسجيل الدخول مرة أخرى', 'success');
+};
     // ==================== دوال تعديل جهات الاتصال ====================
     function openEditPhoneModal(id, name, type, phone) {
         document.getElementById('editContactId').value = id;
@@ -7481,158 +7511,52 @@ function toggleSectionExclusive(sectionId) {
 }
 </script>
 <script>
-// ==================== نظام البحث المتقدم ====================
+// ==================== إضافة حقول بحث ====================
 (function() {
-    'use strict';
-    
-    // دالة تحويل Select إلى Searchable
-    function makeSearchableSelect(selectId, placeholderText) {
-        const select = document.getElementById(selectId);
-        if (!select) return null;
-        
-        // تجنب إضافة البحث مرتين
-        if (select.parentElement.querySelector('.search-input-for-' + selectId)) return;
-        
-        const container = select.parentElement;
+    function addSearchToSelect(selectElement, placeholderText) {
+        if (!selectElement) return;
+        if (selectElement.parentElement.querySelector('.custom-search-box')) return;
+
+        const container = selectElement.parentElement;
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = placeholderText || '🔍 بحث...';
-        searchInput.className = 'search-input-for-' + selectId;
-        searchInput.style.cssText = 'width:100%; padding:10px; margin-bottom:10px; border-radius:40px; border:1px solid #d4af37; background:#222; color:#fff; font-size:14px;';
+        searchInput.placeholder = placeholderText;
+        searchInput.className = 'custom-search-box';
+        searchInput.style.cssText = 'width:100%; padding:10px; margin-bottom:8px; border-radius:40px; border:1px solid #d4af37; background:#222; color:#fff; box-sizing:border-box;';
         
-        select.style.display = 'none';
-        container.insertBefore(searchInput, select);
+        container.insertBefore(searchInput, selectElement);
         
-        let originalOptions = [];
-        
-        function updateOptions() {
-            originalOptions = [];
-            for (let i = 0; i < select.options.length; i++) {
-                const opt = select.options[i];
-                originalOptions.push({
-                    value: opt.value,
-                    text: opt.text,
-                    phone: opt.dataset.phone || '',
-                    name: opt.dataset.name || '',
-                    balance: opt.dataset.balance || '0'
-                });
+        searchInput.addEventListener('keyup', function() {
+            const filter = this.value.toLowerCase();
+            for (let i = 0; i < selectElement.options.length; i++) {
+                const opt = selectElement.options[i];
+                opt.style.display = opt.text.toLowerCase().includes(filter) ? '' : 'none';
             }
-        }
-        
-        function filterOptions() {
-            const term = searchInput.value.toLowerCase();
-            select.innerHTML = '';
-            
-            const filtered = originalOptions.filter(opt => 
-                opt.text.toLowerCase().includes(term)
-            );
-            
-            filtered.forEach(opt => {
-                const option = document.createElement('option');
-                option.value = opt.value;
-                option.text = opt.text;
-                if (opt.phone) option.dataset.phone = opt.phone;
-                if (opt.name) option.dataset.name = opt.name;
-                if (opt.balance) option.dataset.balance = opt.balance;
-                select.appendChild(option);
-            });
-            
-            if (filtered.length === 1 && term !== '') {
-                select.value = filtered[0].value;
-                if (typeof select.onchange === 'function') select.onchange();
-            }
-        }
-        
-        const observer = new MutationObserver(updateOptions);
-        observer.observe(select, { childList: true, subtree: true });
-        
-        updateOptions();
-        searchInput.addEventListener('input', filterOptions);
-        
-        return searchInput;
-    }
-    
-    // دالة البحث في جدول المنتجات (تعديل الأسعار)
-    function addProductTableSearch() {
-        const modal = document.getElementById('priceManagerModal');
-        if (!modal) return;
-        
-        if (modal.querySelector('.product-table-search')) return;
-        
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = '🔍 بحث عن صنف...';
-        searchInput.className = 'product-table-search';
-        searchInput.style.cssText = 'width:100%; padding:12px; margin-bottom:15px; border-radius:40px; border:1px solid #d4af37; background:#222; color:#fff; font-size:14px;';
-        
-        const title = modal.querySelector('h3');
-        if (title) {
-            title.insertAdjacentElement('afterend', searchInput);
-        } else {
-            modal.querySelector('.glass-card')?.insertBefore(searchInput, modal.querySelector('.glass-card').firstChild);
-        }
-        
-        searchInput.addEventListener('input', function() {
-            const term = this.value.toLowerCase();
-            const rows = document.querySelectorAll('#priceTableBody tr');
-            rows.forEach(row => {
-                const nameCell = row.cells[0];
-                if (nameCell && nameCell.innerText.toLowerCase().includes(term)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
         });
     }
-    
-    // تعديل دالة setupInvoice
-    const originalSetupInvoice = window.setupInvoice;
-    if (originalSetupInvoice) {
-        window.setupInvoice = function(type, mode) {
-            originalSetupInvoice(type, mode);
+
+    // مراقبة نافذة الفاتورة
+    const observer = new MutationObserver(() => {
+        const invModal = document.getElementById('invoiceModal');
+        if (invModal && invModal.style.display === 'block') {
+            // بحث الصنف (موجود فوراً)
+            addSearchToSelect(document.getElementById('prodSelect'), '🔍 بحث عن صنف...');
+            
+            // بحث العميل/المورد (ننتظر 0.5 ثانية حتى تمتلئ القائمة)
             setTimeout(() => {
-                makeSearchableSelect('prodSelect', '🔍 بحث عن صنف...');
-                makeSearchableSelect('conSelect', '🔍 بحث عن عميل/مورد...');
-            }, 200);
-        };
-    }
-    
-    // تعديل دالة openPaymentModal
-    const originalOpenPayment = window.openPaymentModal;
-    if (originalOpenPayment) {
-        window.openPaymentModal = function(type) {
-            originalOpenPayment(type);
+                addSearchToSelect(document.getElementById('conSelect'), '🔍 بحث عن عميل/مورد...');
+            }, 500);
+        }
+        
+        const payModal = document.getElementById('paymentModal');
+        if (payModal && payModal.style.display === 'block') {
             setTimeout(() => {
-                makeSearchableSelect('paymentContactSelect', '🔍 بحث عن اسم...');
-            }, 200);
-        };
-    }
-    
-    // تعديل دالة openPriceManager
-    const originalOpenPrice = window.openPriceManager;
-    if (originalOpenPrice) {
-        window.openPriceManager = async function() {
-            if (originalOpenPrice) await originalOpenPrice();
-            setTimeout(addProductTableSearch, 300);
-        };
-    }
-    
-    // تشغيل البحث عند تحميل أي نافذة فاتورة موجودة مسبقاً
-    setInterval(() => {
-        if (document.getElementById('invoiceModal') && document.getElementById('invoiceModal').style.display === 'block') {
-            makeSearchableSelect('prodSelect', '🔍 بحث عن صنف...');
-            makeSearchableSelect('conSelect', '🔍 بحث عن عميل/مورد...');
+                addSearchToSelect(document.getElementById('paymentContactSelect'), '🔍 بحث عن اسم...');
+            }, 500);
         }
-        if (document.getElementById('paymentModal') && document.getElementById('paymentModal').style.display === 'block') {
-            makeSearchableSelect('paymentContactSelect', '🔍 بحث عن اسم...');
-        }
-        if (document.getElementById('priceManagerModal') && document.getElementById('priceManagerModal').style.display === 'block') {
-            addProductTableSearch();
-        }
-    }, 1000);
+    });
     
-    console.log('✅ نظام البحث التلقائي تم تفعيله');
+    observer.observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 </body>
