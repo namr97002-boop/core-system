@@ -3515,7 +3515,7 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
     }
 // ==================== النسخ الاحتياطي مع تذكر الإذن (مرة واحدة فقط) ====================
 
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzwK68SfaC_Rq0xJNiOicFSQckYRL_S6lurvIdHW6CywjSRuON8nwanjFh1bRyoMlRl/exec';
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbycF4-g-JJxMcuSoj_aOZ5i5vSpzh9-DWsTcJvKg4dqnC4C45-7NSdVyQB-bY8vR4dl/exec';
 const TOKEN_STORAGE_KEY = 'drive_permission_granted';
 
 function isPermissionGranted() {
@@ -3639,62 +3639,27 @@ window.backupToDrive = async function() {
     }
 };
 // استعادة من Drive (نفس طريقة الرفع)
-window.restoreFromCloud = async function() {
-    if (!navigator.onLine) {
-        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
-        return;
-    }
-    if (!confirm('⚠️ تحذير: سيتم استبدال جميع البيانات الحالية بنسخة Drive؟')) return;
+async function restoreFromCloud() {
+    const storeName = prompt("أدخل اسم المخزن:");
+    if (!storeName) return;
 
-    setLoading(true);
     try {
-        const storeName = localStorage.getItem('storeName') || 'نظامي';
-        
-        showToast('📦 جاري فتح نافذة الاستعادة...', 'info');
-        
-        // فتح نافذة لعرض البيانات (نفس طريقة الرفع)
-        const restoreWindow = window.open(`${CLOUD_API_URL}?action=restore&storeName=${encodeURIComponent(storeName)}`, '_blank', 'width=500,height=600');
-        
-        if (!restoreWindow) {
-            showToast('⚠️ الرجاء السماح بالنوافذ المنبثقة', 'error');
-            setLoading(false);
-            return;
+        const response = await fetch(`${SCRIPT_URL}?action=restore&storeName=${encodeURIComponent(storeName)}`);
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            await applyBackupData(result.data); 
+            alert("تمت الاستعادة بنجاح!");
+            location.reload();
+        } else {
+            alert("فشل: " + result.message);
         }
-        
-        // مراقبة النافذة حتى تغلق
-        const checkInterval = setInterval(async () => {
-            if (restoreWindow.closed) {
-                clearInterval(checkInterval);
-                
-                // بعد إغلاق النافذة، نعيد تحميل البيانات من التخزين المحلي
-                // لأن المستخدم رأى البيانات وعرف أنها موجودة
-                showToast('✅ تمت عملية الاستعادة، جاري تحديث البيانات...', 'success');
-                
-                // إعادة تحميل البيانات من التخزين المحلي
-                await loadMasterDataFromCache();
-                await loadData();
-                
-                showToast('🔄 تم تحديث البيانات بنجاح', 'success');
-                setLoading(false);
-            }
-        }, 500);
-        
-        // مهلة 60 ثانية
-        setTimeout(() => {
-            clearInterval(checkInterval);
-            if (!restoreWindow.closed) {
-                restoreWindow.close();
-                showToast('⚠️ انتهى الوقت، حاول مرة أخرى', 'error');
-                setLoading(false);
-            }
-        }, 60000);
-        
-    } catch(e) {
-        console.error(e);
-        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
-        setLoading(false);
+    } catch (e) {
+        alert("تأكد من الاتصال بالإنترنت");
     }
-};
+}
+
+
 // استعادة من ملف محلي
 window.importBackup = async function() {
     const input = document.createElement('input');
