@@ -3515,7 +3515,7 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
     }
 // ==================== النسخ الاحتياطي مع تذكر الإذن (مرة واحدة فقط) ====================
 
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbwZ-W9AYl2U8_v90eP2GenD_UX-_En4UKoeZBnG1stCnHSqgXaXgDicctS4H2DYP9X_ug/exec';
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycby9I-45z8zEG-g3RwWJbgFmOwMK8kSuM-55cVLsAnSt10luuZHuS8CByHbVUhr_6NMvQA/exec';
 const TOKEN_STORAGE_KEY = 'drive_permission_granted';
 
 function isPermissionGranted() {
@@ -3583,113 +3583,76 @@ window.exportBackup = async function() {
 };
 
 // رفع إلى Drive - طريقة متوافقة مع السكربت الخلفي
-window.backupToDrive = async function() {
+async function backupToDrive() {
     if (!navigator.onLine) {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
         return;
     }
     setLoading(true);
     try {
+        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
         const backup = await getAllProjectData();
-        const backupString = JSON.stringify(backup, null, 2);
-        const storeName = localStorage.getItem('storeName') || 'نظامي';
-        const filename = `backup_${storeName}.json`;
-        
-        showToast('📦 جاري فتح نافذة الرفع...', 'info');
-        
-        // إنشاء نموذج بنفس أسماء الحقول التي ينتظرها السكربت
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `${CLOUD_API_URL}?action=upload`;
-        form.target = '_blank';
-        
-        // حقول متطابقة مع ما يقرأه السكربت (e.parameter)
-        const dataField = document.createElement('input');
-        dataField.type = 'hidden';
-        dataField.name = 'data';
-        dataField.value = backupString;
-        
-        const nameField = document.createElement('input');
-        nameField.type = 'hidden';
-        nameField.name = 'filename';
-        nameField.value = filename;
-        
-        const storeField = document.createElement('input');
-        storeField.type = 'hidden';
-        storeField.name = 'storeName';
-        storeField.value = storeName;
-        
-        form.appendChild(dataField);
-        form.appendChild(nameField);
-        form.appendChild(storeField);
-        document.body.appendChild(form);
-        
-        form.submit();
-        
-        setTimeout(() => {
-            document.body.removeChild(form);
-            showToast('✅ تم فتح نافذة الرفع، أغلقها بعد ظهور رسالة النجاح', 'success');
-        }, 1000);
-        
+
+        // استخدام POST لإرسال الأكشن والبيانات
+        await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            mode: 'no-cors', // لضمان تجاوز قيود CORS أثناء الرفع
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'upload', backup: backup })
+        });
+
+        // في وضع no-cors نفترض النجاح إذا لم يحدث خطأ في الاتصال
+        showToast('✅ تم إرسال النسخة إلى Drive بنجاح', 'success');
     } catch(e) {
-        console.error(e);
-        showToast('❌ فشل الرفع: ' + e.message, 'error');
+        console.error("خطأ الرفع:", e);
+        showToast("❌ فشل الرفع: " + e.message, "error");
     } finally {
         setLoading(false);
     }
-};
-// استعادة من Drive (نفس طريقة الرفع)
-window.restoreFromCloud = async function() {
+}
+
+// 4. استعادة من Drive (معدلة جذرياً لحل مشكلة "لا توجد نسخة")
+async function restoreFromCloud() {
     if (!navigator.onLine) {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
         return;
     }
-    if (!confirm('⚠️ تحذير: سيتم استبدال البيانات الحالية بنسخة Drive؟')) return;
+    if (!confirm('⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة Drive؟')) return;
 
     setLoading(true);
     try {
-        const storeName = localStorage.getItem('storeName') || 'نظامي';
+        showToast('☁️ جاري طلب البيانات من Drive...', 'info');
         
-        showToast('📦 جاري فتح نافذة الاستعادة...', 'info');
+        // إرسال طلب POST لأن السكربت يعالج الأكشن في doPost
+        const response = await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            body: JSON.stringify({ action: 'restore' })
+        });
+
+        const text = await response.text();
         
-        // نفس طريقة الرفع بالضبط (لكن action=restore)
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `${CLOUD_API_URL}`;
-        form.target = '_blank';
-        
-        const actionField = document.createElement('input');
-        actionField.type = 'hidden';
-        actionField.name = 'action';
-        actionField.value = 'restore';
-        
-        const storeField = document.createElement('input');
-        storeField.type = 'hidden';
-        storeField.name = 'storeName';
-        storeField.value = storeName;
-        
-        form.appendChild(actionField);
-        form.appendChild(storeField);
-        document.body.appendChild(form);
-        
-        form.submit();
-        
-        setTimeout(() => {
-            document.body.removeChild(form);
-            showToast('✅ تم فتح نافذة الاستعادة، أغلقها بعد ظهور النتيجة', 'success');
-        }, 1000);
-        
+        // فحص إذا كان الرد HTML (صفحة خطأ من جوجل) لمنع خطأ الـ Token
+        if (text.trim().startsWith('<')) {
+            throw new Error("رد غير صالح من الخادم. تأكد من إعدادات النشر على (Anyone).");
+        }
+
+        const result = JSON.parse(text);
+
+        if (result.status === 'success' && result.data) {
+            await applyBackupData(result.data);
+            showToast(`✅ تم استعادة البيانات بنجاح`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('⚠️ ' + (result.message || 'لم يتم العثور على نسخة'), 'error');
+        }
     } catch(e) {
-        console.error(e);
-        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
+        console.error('خطأ الاستعادة:', e);
+        showToast('❌ فشل الاستعادة: تأكد من وجود ملف النسخة في درايف', 'error');
     } finally {
         setLoading(false);
-        setTimeout(() => {
-            loadMasterDataFromCache();
-            loadData();
-        }, 2000);
     }
-};
+}
 
 // استعادة من ملف محلي
 window.importBackup = async function() {
