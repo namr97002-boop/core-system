@@ -3515,7 +3515,7 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
     }
 // ==================== النسخ الاحتياطي مع تذكر الإذن (مرة واحدة فقط) ====================
 
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbycF4-g-JJxMcuSoj_aOZ5i5vSpzh9-DWsTcJvKg4dqnC4C45-7NSdVyQB-bY8vR4dl/exec';
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbwZ-W9AYl2U8_v90eP2GenD_UX-_En4UKoeZBnG1stCnHSqgXaXgDicctS4H2DYP9X_ug/exec';
 const TOKEN_STORAGE_KEY = 'drive_permission_granted';
 
 function isPermissionGranted() {
@@ -3639,26 +3639,57 @@ window.backupToDrive = async function() {
     }
 };
 // استعادة من Drive (نفس طريقة الرفع)
-async function restoreFromCloud() {
-    const storeName = prompt("أدخل اسم المخزن:");
-    if (!storeName) return;
-
-    try {
-        const response = await fetch(`${SCRIPT_URL}?action=restore&storeName=${encodeURIComponent(storeName)}`);
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            await applyBackupData(result.data); 
-            alert("تمت الاستعادة بنجاح!");
-            location.reload();
-        } else {
-            alert("فشل: " + result.message);
-        }
-    } catch (e) {
-        alert("تأكد من الاتصال بالإنترنت");
+window.restoreFromCloud = async function() {
+    if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
+        return;
     }
-}
+    if (!confirm('⚠️ تحذير: سيتم استبدال البيانات الحالية بنسخة Drive؟')) return;
 
+    setLoading(true);
+    try {
+        const storeName = localStorage.getItem('storeName') || 'نظامي';
+        
+        showToast('📦 جاري فتح نافذة الاستعادة...', 'info');
+        
+        // نفس طريقة الرفع بالضبط (لكن action=restore)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `${CLOUD_API_URL}`;
+        form.target = '_blank';
+        
+        const actionField = document.createElement('input');
+        actionField.type = 'hidden';
+        actionField.name = 'action';
+        actionField.value = 'restore';
+        
+        const storeField = document.createElement('input');
+        storeField.type = 'hidden';
+        storeField.name = 'storeName';
+        storeField.value = storeName;
+        
+        form.appendChild(actionField);
+        form.appendChild(storeField);
+        document.body.appendChild(form);
+        
+        form.submit();
+        
+        setTimeout(() => {
+            document.body.removeChild(form);
+            showToast('✅ تم فتح نافذة الاستعادة، أغلقها بعد ظهور النتيجة', 'success');
+        }, 1000);
+        
+    } catch(e) {
+        console.error(e);
+        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
+    } finally {
+        setLoading(false);
+        setTimeout(() => {
+            loadMasterDataFromCache();
+            loadData();
+        }, 2000);
+    }
+};
 
 // استعادة من ملف محلي
 window.importBackup = async function() {
