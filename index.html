@@ -362,7 +362,7 @@ const settingsStore = {
 </script>
 <script>
 // ==================== أرشيف السنوات إلى Drive ====================
-const DRIVE_API_URL = 'https://script.google.com/macros/s/AKfycbxjB9dpmZbiFnYXWSUQ3zhz759f-WG7fA-Yw__YRcjo3SzliGbaYGk_9uSaY7GnKicF/exec';
+const DRIVE_API_URL = 'https://script.google.com/macros/s/AKfycbwCobXYwWcmaePdmMjmVbJ7GVF3x5rFoOygax-YTko6KA8G0Bwm-KOP0AHFCHUKuxCB/exec';
 // أرشفة سنة
 async function archiveYearToDrive() {
     const year = prompt("📅 أدخل السنة المراد أرشفتها (مثال: 2025):");
@@ -1520,6 +1520,98 @@ input, select, textarea {
     90% { opacity: 0.6; }
     100% { opacity: 0; transform: translateY(-100px) scale(1.5); }
 }
+.hidden-buttons {
+    display: none;  /* هذا السطر مهم جداً */
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 0 20px 20px;
+    margin-top: -5px;
+    animation: slideDown 0.3s ease;
+}
+
+.btn-group {
+    margin-bottom: 10px;
+}
+
+.btn-group button {
+    width: 100%;
+    border-radius: 60px !important;
+}
+/* ========== تلوين الأيقونات والأزرار ========== */
+
+/* تلوين النص داخل الأزرار */
+.btn-group button,
+.btn-group .hidden-buttons button,
+.btn-statement,
+.btn-outline {
+    color: white !important;
+    font-weight: bold;
+}
+
+/* تلوين الأيقونات فقط (بدون النص) */
+.btn-group button i,
+.btn-group .hidden-buttons button i,
+.btn-statement i,
+.btn-outline i {
+    color: #ffd700 !important;  /* لون ذهبي للأيقونات */
+    margin-left: 8px;
+}
+
+/* ألوان مميزة لكل زر رئيسي */
+#toggleInvoicesBtn { background: linear-gradient(135deg, #d4af37, #b8860b) !important; color: white !important; }
+#toggleAssignmentsBtn { background: linear-gradient(135deg, #06b6d4, #0891b2) !important; color: white !important; }
+#toggleBackupBtn { background: linear-gradient(135deg, #6366f1, #4f46e5) !important; color: white !important; }
+#toggleManagementBtn { background: linear-gradient(135deg, #1e293b, #0f172a) !important; color: white !important; }
+
+/* ألوان الأزرار الفرعية */
+.btn-green { background: #10b981 !important; color: white !important; }
+.btn-red { background: #ef4444 !important; color: white !important; }
+.btn-blue { background: #3b82f6 !important; color: white !important; }
+.btn-orange { background: #f97316 !important; color: white !important; }
+.btn-purple { background: #8b5cf6 !important; color: white !important; }
+.btn-pink { background: #ec4899 !important; color: white !important; }
+.btn-cyan { background: #06b6d4 !important; color: white !important; }
+.btn-success { background: #22c55e !important; color: white !important; }
+.btn-warning { background: #eab308 !important; color: black !important; }
+.btn-indigo { background: #6366f1 !important; color: white !important; }
+.btn-secondary { background: #64748b !important; color: white !important; }
+.btn-primary { background: #3b82f6 !important; color: white !important; }
+.btn-info { background: #06b6d4 !important; color: white !important; }
+.btn-dark { background: #1e293b !important; color: white !important; }
+.btn-danger { background: #dc2626 !important; color: white !important; }
+.btn-stats { background: #8b5cf6 !important; color: white !important; }
+.btn-pdf { background: #dc2626 !important; color: white !important; }
+.btn-statement { background: #0f766e !important; color: white !important; }
+.btn-outline { background: transparent !important; border: 1px solid #d4af37 !important; color: #d4af37 !important; }
+
+/* تلوين الأيقونات داخل الأزرار الفرعية */
+.btn-green i, .btn-red i, .btn-blue i, .btn-orange i,
+.btn-purple i, .btn-pink i, .btn-cyan i, .btn-success i,
+.btn-warning i, .btn-indigo i, .btn-secondary i, .btn-primary i,
+.btn-info i, .btn-dark i, .btn-danger i, .btn-stats i,
+.btn-pdf i, .btn-statement i {
+    color: #ffd700 !important;  /* أيقونات ذهبية */
+    margin-left: 8px;
+    font-size: 16px;
+}
+
+/* تحسين ظهور النص في زر التحذير (لونه أسود) */
+.btn-warning {
+    color: black !important;
+}
+.btn-warning i {
+    color: black !important;
+}
+
+/* تأثير عند المرور على الزر */
+.btn-group button:hover,
+.btn-group .hidden-buttons button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    transition: all 0.3s ease;
+}
 </style>
 </head>
 <body>
@@ -1594,83 +1686,75 @@ input, select, textarea {
             <p style="font-size:12px; opacity:0.8; text-align:center;">نظام محلي كامل - يعمل بدون إنترنت</p>
         </div>
 
-       <div class="glass-card">
-    <h3 style="color:var(--gold); font-size:16px; margin-top:0;"><i class="fas fa-bolt"></i> القائمة الرئيسية</h3>
-    
-    <!-- الأزرار الرئيسية الأربعة -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <button class="btn btn-gold" id="toggleInvoicesBtn" onclick="toggleSection('invoicesSection')">
-            <i class="fas fa-file-invoice"></i> 📋 الفواتير
-        </button>
-        <button class="btn btn-cyan" id="togglePaymentsBtn" onclick="toggleSection('paymentsSection')">
-            <i class="fas fa-hand-holding-usd"></i> 💰 السندات
-        </button>
-        <button class="btn" style="background:#0f9d58;" id="toggleBackupBtn" onclick="toggleSection('backupSection')">
-            <i class="fas fa-cloud-upload-alt"></i> 💾 النسخ والاستعادة
-        </button>
-        <button class="btn btn-purple" id="toggleManagementBtn" onclick="toggleSection('managementSection')">
-            <i class="fas fa-cogs"></i> ⚙️ الإدارة
-        </button>
-    </div>
+<!-- ========== الأزرار المجمعة بترتيب جديد ========== -->
 
-    <!-- القسم 1: الفواتير (مخفي في البداية) -->
-    <div id="invoicesSection" style="display: none; margin-top: 15px;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button class="btn btn-green btn-sm" onclick="setupInvoice('sale', 'cash')"><i class="fas fa-shopping-cart"></i> بيع كاش</button>
-            <button class="btn btn-red btn-sm" onclick="setupInvoice('sale', 'credit')"><i class="fas fa-clock"></i> بيع آجل</button>
-            <button class="btn btn-blue btn-sm" onclick="setupInvoice('purchase', 'cash')"><i class="fas fa-truck"></i> شراء كاش</button>
-            <button class="btn btn-orange btn-sm" onclick="setupInvoice('purchase', 'credit')"><i class="fas fa-calendar"></i> شراء آجل</button>
-            <button class="btn btn-purple btn-sm" onclick="setupInvoice('sale_return', 'cash')"><i class="fas fa-undo-alt"></i> مرتجع بيع</button>
-            <button class="btn btn-pink btn-sm" onclick="setupInvoice('purchase_return', 'cash')"><i class="fas fa-exchange-alt"></i> مرتجع شراء</button>
+<!-- الصف الأول: الفواتير + الإسناد (بجانب بعض) -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+    <!-- زر الفواتير -->
+    <div class="btn-group">
+        <button class="btn btn-gold" id="toggleInvoicesBtn">📋 الفواتير</button>
+        <div class="hidden-buttons" id="invoicesSubmenu">
+            <button class="btn btn-green" onclick="setupInvoice('sale', 'cash')">💰 بيع كاش</button>
+            <button class="btn btn-red" onclick="setupInvoice('sale', 'credit')">⏰ بيع آجل</button>
+            <button class="btn btn-blue" onclick="setupInvoice('purchase', 'cash')">🚚 شراء كاش</button>
+            <button class="btn btn-orange" onclick="setupInvoice('purchase', 'credit')">📅 شراء آجل</button>
+            <button class="btn btn-purple" onclick="setupInvoice('sale_return', 'cash')">🔄 مرتجع بيع</button>
+            <button class="btn btn-pink" onclick="setupInvoice('purchase_return', 'cash')">↩️ مرتجع شراء</button>
         </div>
     </div>
 
-    <!-- القسم 2: السندات (مخفي في البداية) -->
-    <div id="paymentsSection" style="display: none; margin-top: 15px;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button class="btn btn-cyan btn-sm" onclick="openPaymentModal('receipt')"><i class="fas fa-hand-holding-usd"></i> سند قبض</button>
-            <button class="btn" style="background: #f59e0b;" onclick="openPaymentModal('payment')"><i class="fas fa-money-bill-wave"></i> سند صرف</button>
+    <!-- زر الإسناد -->
+    <div class="btn-group">
+        <button class="btn btn-cyan" id="toggleAssignmentsBtn">💰 الإسناد</button>
+        <div class="hidden-buttons" id="assignmentsSubmenu">
+            <button class="btn btn-success" onclick="openPaymentModal('receipt')">📥 سند قبض</button>
+            <button class="btn btn-warning" onclick="openPaymentModal('payment')">📤 سند صرف</button>
         </div>
     </div>
-
-    <!-- القسم 3: النسخ والاستعادة (مخفي في البداية) -->
-    <div id="backupSection" style="display: none; margin-top: 15px;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <button class="btn btn-purple btn-sm" onclick="exportBackup()"><i class="fas fa-download"></i> نسخة محلية</button>
-            <button class="btn btn-sm" onclick="backupToDrive()" style="background: linear-gradient(145deg, #0f9d58, #4285f4);"><i class="fas fa-cloud-upload-alt"></i> رفع إلى Drive</button>
-            <button class="btn btn-cyan btn-sm" onclick="restoreFromCloud()"><i class="fas fa-cloud-download-alt"></i> استعادة من Drive</button>
-            <button class="btn btn-indigo btn-sm" onclick="importBackup()"><i class="fas fa-upload"></i> استعادة ملف</button>
-        </div>
-    </div>
-
-    <!-- القسم 4: الإدارة (مخفي في البداية) -->
-    <div id="managementSection" style="display: none; margin-top: 15px;">
-        <div class="management-grid" style="gap: 8px;">
-            <button class="btn btn-gold btn-sm" onclick="openAddProductModal()"><i class="fas fa-box"></i> صنف جديد</button>
-            <button class="btn btn-indigo btn-sm" onclick="openAddCustomerModal()"><i class="fas fa-user-plus"></i> عميل جديد</button>
-            <button class="btn btn-sm" style="background:#d97706" onclick="openAddSupplierModal()"><i class="fas fa-truck"></i> مورد جديد</button>
-            <button class="btn btn-gold btn-sm" onclick="openPriceManager()"><i class="fas fa-tags"></i> تعديل الأسعار</button>
-            <button class="btn btn-sm" style="background:#d97706;" onclick="openSecurityModal()"><i class="fas fa-shield-alt"></i> الأمان</button>
-            <button class="btn btn-sm" style="background:#6366f1;" onclick="archiveYearToDrive()"><i class="fas fa-archive"></i> أرشفة سنة</button>
-            <button class="btn btn-sm" style="background:#d97706;" onclick="openYearEndModal()"><i class="fas fa-calendar-check"></i> الحساب الختامي</button>
-            <button class="btn btn-sm" style="background:#8b5cf6;" onclick="restoreYearFromDrive()"><i class="fas fa-folder-open"></i> استعادة سنة</button>
-            <button class="btn btn-sm" style="background:#8b5cf6;" onclick="showCurrentBalances()"><i class="fas fa-scale-balanced"></i> الأرصدة</button>
-            <button class="btn btn-blue btn-sm" onclick="searchCustomerInvoices()"><i class="fas fa-search"></i> بحث شامل</button>
-            <button class="btn btn-sm" style="background:#8b5cf6;" onclick="openReportModal()"><i class="fas fa-chart-bar"></i> تقرير يومي</button>
-            <button class="btn btn-stats btn-sm" onclick="openAdvancedStatsModal()"><i class="fas fa-chart-pie"></i> إحصائيات</button>
-            <button class="btn btn-sm" style="background:#8b5cf6;" onclick="let n=prompt('الاسم الجديد للمحل:'); if(n){localStorage.setItem('storeName',n); document.querySelector('#main-system .shop-title h1').innerHTML='🏪 '+n; alert('تم حفظ الاسم');}"><i class="fas fa-store"></i> تغيير الاسم</button>
-            <button class="btn btn-dark-red btn-sm" onclick="openDangerZoneModal()"><i class="fas fa-skull-crossbones"></i> منطقة الحذف</button>
-            <button class="btn btn-pdf btn-sm" onclick="exportSystemGuidePDF()"><i class="fas fa-file-pdf"></i> دليل النظام</button>
-            <button class="btn btn-stats btn-sm" onclick="openPnLReportModal()"><i class="fas fa-chart-line"></i> أرباح وخسائر</button>
-            <button class="btn btn-cyan btn-sm" onclick="openAdvancedStatementModal()"><i class="fas fa-search-plus"></i> كشف متقدم</button>
-            <button class="btn btn-outline btn-sm" onclick="toggleAdminPanel()" style="background:var(--gold); color:#000;"><i class="fas fa-table-list"></i> لوحة السجلات</button>
-        </div>
-    </div>
-
-    <!-- زر كشف حساب منفرد خارج الأقسام -->
-    <button class="btn btn-statement" style="margin-top:15px;" onclick="openStatementModal()"><i class="fas fa-file-invoice"></i> 📑 كشف حساب</button>
 </div>
-        <button class="btn btn-outline" onclick="toggleAdminPanel()" style="margin-bottom:15px;"><i class="fas fa-cogs"></i> لوحة السجلات</button>
+
+<!-- الصف الثاني: النسخ + الإدارة (بجانب بعض) -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+    <!-- زر النسخ -->
+    <div class="btn-group">
+        <button class="btn btn-indigo" id="toggleBackupBtn">💾 النسخ</button>
+        <div class="hidden-buttons" id="backupSubmenu">
+            <button class="btn btn-secondary" onclick="exportBackup()">📁 نسخة محلية</button>
+            <button class="btn btn-primary" onclick="backupToDrive()">☁️ رفع إلى Drive</button>
+            <button class="btn btn-info" onclick="restoreFromCloud()">⬇️ استعادة من Drive</button>
+            <button class="btn btn-secondary" onclick="importBackup()">📂 استعادة محلية</button>
+        </div>
+    </div>
+
+    <!-- زر الإدارة -->
+    <div class="btn-group">
+        <button class="btn btn-dark" id="toggleManagementBtn">⚙️ الإدارة</button>
+        <div class="hidden-buttons" id="managementSubmenu">
+            <button class="btn btn-gold" onclick="openAddProductModal()">📦 صنف جديد</button>
+            <button class="btn btn-indigo" onclick="openAddCustomerModal()">👤 عميل جديد</button>
+            <button class="btn btn-warning" onclick="openAddSupplierModal()">🚚 مورد جديد</button>
+            <button class="btn btn-gold" onclick="openPriceManager()">🏷️ تعديل الأسعار</button>
+            <button class="btn btn-danger" onclick="openSecurityModal()">🔒 الأمان</button>
+            <button class="btn btn-purple" onclick="archiveYearToDrive()">📦 أرشفة سنة</button>
+            <button class="btn btn-cyan" onclick="showYearlyClosing()">📅 الحساب الختامي</button>
+            <button class="btn btn-info" onclick="showCurrentBalances()">⚖️ الأرصدة الحالية</button>
+            <button class="btn btn-blue" onclick="searchCustomerInvoices()">🔍 بحث شامل</button>
+            <button class="btn btn-purple" onclick="openReportModal()">📊 التقارير اليومية</button>
+            <button class="btn btn-stats" onclick="openAdvancedStatsModal()">📈 إحصائيات متقدمة</button>
+            <button class="btn btn-stats" onclick="openPnLReportModal()">📉 أرباح وخسائر</button>
+            <button class="btn btn-cyan" onclick="openAdvancedStatementModal()">🔎 كشف متقدم</button>
+            <button class="btn btn-pdf" onclick="exportSystemGuidePDF()">📘 دليل النظام PDF</button>
+            <button class="btn btn-danger" onclick="openDangerZoneModal()">⚠️ منطقة الحذف</button>
+            <button class="btn btn-gold" onclick="openChangeStoreNameModal()">🏷️ تغيير اسم المحل</button>
+        </div>
+    </div>
+</div>
+
+<!-- الأزرار المنفصلة (كشف الحساب ولوحة السجلات) -->
+<button class="btn btn-statement" style="margin-top:10px; width:100%;" onclick="openStatementModal()">📑 كشف حساب</button>
+<button class="btn btn-outline" style="margin-top:10px; width:100%;" onclick="toggleAdminPanel()">📊 لوحة السجلات</button>
+
+
 
         <div id="adminSection" class="glass-card">
             <div class="tabs">
@@ -3513,25 +3597,19 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
         } catch (e) { showToast('خطأ: ' + e.message, 'error'); }
         setLoading(false);
     }
-// ==================== النسخ الاحتياطي مع تذكر الإذن (مرة واحدة فقط) ====================
+// ==================== دوال النسخ الاحتياطي المصححة والكاملة ====================
 
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycby9I-45z8zEG-g3RwWJbgFmOwMK8kSuM-55cVLsAnSt10luuZHuS8CByHbVUhr_6NMvQA/exec';
-const TOKEN_STORAGE_KEY = 'drive_permission_granted';
+// 1. تعريف الرابط (تأكد أنه لا يتكرر في مكان آخر في ملفك)
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzTbi9mJCHSdWGGqnhqg1dr_F84MQj8zPmrTuX8PDSOm17ldOwXrCHBn30BPW0Rxl72/exec';
 
-function isPermissionGranted() {
-    return localStorage.getItem(TOKEN_STORAGE_KEY) === 'true';
-}
-
-function setPermissionGranted() {
-    localStorage.setItem(TOKEN_STORAGE_KEY, 'true');
-}
-
+// دالة مساعدة لجلب كافة البيانات من التخزين المحلي
 async function getAllProjectData() {
     const getAllFromStore = async (store) => {
         const keys = await store.keys();
         const items = await Promise.all(keys.map(k => store.getItem(k)));
         return items.filter(item => item !== null);
     };
+
     const [products, contacts, invoices, items, payments] = await Promise.all([
         getAllFromStore(productsStore),
         getAllFromStore(contactsStore),
@@ -3539,30 +3617,20 @@ async function getAllProjectData() {
         getAllFromStore(invoiceItemsStore),
         getAllFromStore(paymentsStore)
     ]);
-    return { products, contacts, invoices, invoice_items: items, payments };
+
+    return { 
+        version: '2.0', 
+        date: new Date().toISOString(), 
+        products, 
+        contacts, 
+        invoices, 
+        invoice_items: items, 
+        payments 
+    };
 }
 
-async function applyBackupData(data) {
-    const storeMap = [
-        { store: productsStore, items: data.products },
-        { store: contactsStore, items: data.contacts },
-        { store: invoicesStore, items: data.invoices },
-        { store: invoiceItemsStore, items: data.invoice_items },
-        { store: paymentsStore, items: data.payments }
-    ];
-    for (const entry of storeMap) {
-        if (entry.items && Array.isArray(entry.items)) {
-            await entry.store.clear();
-            for (const item of entry.items) {
-                if (item && item.id) await entry.store.setItem(item.id, item);
-            }
-        }
-    }
-    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
-}
-
-// تصدير نسخة محلية
-window.exportBackup = async function() {
+// 2. تصدير نسخة احتياطية محلية (ملف JSON)
+async function exportBackup() {
     setLoading(true);
     try {
         const backup = await getAllProjectData();
@@ -3574,15 +3642,15 @@ window.exportBackup = async function() {
         a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast('✅ تم حفظ النسخة المحلية', 'success');
+        showToast('✅ تم حفظ النسخة المحلية بنجاح', 'success');
     } catch (e) {
-        showToast('❌ خطأ: ' + e.message, 'error');
+        showToast('❌ خطأ في التصدير المحلي: ' + e.message, 'error');
     } finally {
         setLoading(false);
     }
-};
+}
 
-// رفع إلى Drive - طريقة متوافقة مع السكربت الخلفي
+// 3. رفع نسخة إلى Drive (معدلة لتعمل مع السكربت المتطور)
 async function backupToDrive() {
     if (!navigator.onLine) {
         showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
@@ -3654,8 +3722,8 @@ async function restoreFromCloud() {
     }
 }
 
-// استعادة من ملف محلي
-window.importBackup = async function() {
+// 5. استعادة من ملف محلي
+async function importBackup() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -3677,13 +3745,36 @@ window.importBackup = async function() {
         }
     };
     input.click();
-};
+}
 
-// إعادة تعيين الإذن
-window.resetDrivePermission = function() {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    showToast('✅ تم إعادة تعيين الإذن - سيطلب منك تسجيل الدخول مرة أخرى', 'success');
-};
+// دالة مساعدة لتطبيق البيانات على المخازن
+async function applyBackupData(data) {
+    const storeMap = [
+        { store: productsStore, items: data.products },
+        { store: contactsStore, items: data.contacts },
+        { store: invoicesStore, items: data.invoices },
+        { store: invoiceItemsStore, items: data.invoice_items },
+        { store: paymentsStore, items: data.payments }
+    ];
+
+    for (const entry of storeMap) {
+        if (entry.items) {
+            await entry.store.clear();
+            for (const item of entry.items) {
+                await entry.store.setItem(item.id, item);
+            }
+        }
+    }
+    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
+}
+
+// ربط الدوال بالمتصفح
+window.exportBackup = exportBackup;
+window.backupToDrive = backupToDrive;
+window.restoreFromCloud = restoreFromCloud;
+window.importBackup = importBackup;
+
+
     // ==================== دوال تعديل جهات الاتصال ====================
     function openEditPhoneModal(id, name, type, phone) {
         document.getElementById('editContactId').value = id;
@@ -6845,6 +6936,66 @@ window.showCurrentBalances = async function() {
 };
 </script>
 <script>
+    // ================== حل بديل يدوي ==================
+    window.onload = function() {
+        // زر الفواتير
+        const invoicesBtn = document.getElementById('toggleInvoicesBtn');
+        const invoicesSub = document.getElementById('invoicesSubmenu');
+        if (invoicesBtn && invoicesSub) {
+            invoicesSub.style.display = 'none';
+            invoicesBtn.onclick = function() {
+                if (invoicesSub.style.display === 'none') {
+                    invoicesSub.style.display = 'grid';
+                } else {
+                    invoicesSub.style.display = 'none';
+                }
+            };
+        }
+        
+        // زر الإسناد
+        const assignmentsBtn = document.getElementById('toggleAssignmentsBtn');
+        const assignmentsSub = document.getElementById('assignmentsSubmenu');
+        if (assignmentsBtn && assignmentsSub) {
+            assignmentsSub.style.display = 'none';
+            assignmentsBtn.onclick = function() {
+                if (assignmentsSub.style.display === 'none') {
+                    assignmentsSub.style.display = 'grid';
+                } else {
+                    assignmentsSub.style.display = 'none';
+                }
+            };
+        }
+        
+        // زر النسخ
+        const backupBtn = document.getElementById('toggleBackupBtn');
+        const backupSub = document.getElementById('backupSubmenu');
+        if (backupBtn && backupSub) {
+            backupSub.style.display = 'none';
+            backupBtn.onclick = function() {
+                if (backupSub.style.display === 'none') {
+                    backupSub.style.display = 'grid';
+                } else {
+                    backupSub.style.display = 'none';
+                }
+            };
+        }
+        
+        // زر الإدارة
+        const managementBtn = document.getElementById('toggleManagementBtn');
+        const managementSub = document.getElementById('managementSubmenu');
+        if (managementBtn && managementSub) {
+            managementSub.style.display = 'none';
+            managementBtn.onclick = function() {
+                if (managementSub.style.display === 'none') {
+                    managementSub.style.display = 'grid';
+                } else {
+                    managementSub.style.display = 'none';
+                }
+            };
+        }
+    };
+</script>
+<script>
 // ==================== الحساب الختامي المتكامل (يشمل العملاء والموردين) ====================
 async function openYearEndModal() {
     try {
@@ -7449,30 +7600,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
-<script>
-// دالة لإظهار وإخفاء الأقسام
-function toggleSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    if (section.style.display === 'none' || section.style.display === '') {
-        section.style.display = 'block';
-    } else {
-        section.style.display = 'none';
-    }
-}
 
-// إغلاق الأقسام الأخرى تلقائياً عند فتح قسم جديد (اختياري)
-function toggleSectionExclusive(sectionId) {
-    const sections = ['invoicesSection', 'paymentsSection', 'backupSection', 'managementSection'];
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (id === sectionId) {
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        } else {
-            el.style.display = 'none';
-        }
-    });
-}
-</script>
 <script>
 // ==================== إضافة حقول بحث ====================
 (function() {
