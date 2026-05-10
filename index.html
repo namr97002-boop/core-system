@@ -3599,10 +3599,28 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
     }
 // ==================== دوال النسخ الاحتياطي المصححة والكاملة ====================
 
-// 1. تعريف الرابط (تأكد أنه لا يتكرر في مكان آخر في ملفك)
+// ==================== النسخ الاحتياطي لكل تاجر على حدة (متوافق مع السكربت الخلفي) ====================
 const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzTbi9mJCHSdWGGqnhqg1dr_F84MQj8zPmrTuX8PDSOm17ldOwXrCHBn30BPW0Rxl72/exec';
 
-// دالة مساعدة لجلب كافة البيانات من التخزين المحلي
+// الحصول على معرف فريد للتاجر (رقم الجوال)
+function getMerchantId() {
+    let merchantId = localStorage.getItem('merchant_phone');
+    
+    if (!merchantId) {
+        merchantId = prompt('📱 يرجى إدخال رقم جوالك (لحفظ نسختك الخاصة):', '05XXXXXXXX');
+        if (merchantId && merchantId.trim() !== '') {
+            localStorage.setItem('merchant_phone', merchantId.trim());
+        } else {
+            // إذا لم يدخل رقم، نستخدم اسم المحل كمعرف
+            merchantId = localStorage.getItem('storeName') || 'unknown_store';
+            merchantId = merchantId.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_').substring(0, 50);
+        }
+    }
+    
+    return merchantId;
+}
+
+// جلب جميع البيانات من التخزين
 async function getAllProjectData() {
     const getAllFromStore = async (store) => {
         const keys = await store.keys();
@@ -3629,7 +3647,126 @@ async function getAllProjectData() {
     };
 }
 
-// 2. تصدير نسخة احتياطية محلية (ملف JSON)
+// رفع النسخة إلى Drive (كل تاجر له مجلده الخاص)
+async function backupToDrive() {
+    if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
+        return;
+    }
+    
+    setLoading(true);
+    try {
+        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
+        
+        const merchantId = getMerchantId();
+        const backup = await getAllProjectData();
+        const fileName = `backup_${merchantId}_${new Date().toISOString().split('T')[0]}.json`;
+        
+        // إرسال البيانات بنفس تنسيق السكربت الخلفي
+        const response = await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                action: 'upload',
+                merchantId: merchantId,
+                fileName: fileName,
+                backup: backup
+            })
+        });
+        
+        showToast(`✅ تم حفظ نسختك الخاصة بنجاح`, 'success');
+        
+        // تحديث وقت آخر نسخة احتياطية
+        localStorage.setItem('last_backup_date', new Date().toISOString());
+        localStorage.setItem('last_backup_merchant', merchantId);
+        
+    } catch(e) {
+        console.error("خطأ الرفع:", e);
+        showToast("❌ فشل الرفع: " + e.message, "error");
+    } finally {
+        setLoading(false);
+    }
+}
+
+// استعادة النسخة من Drive (تجلب نسخة التاجر فقط)
+async function restoreFromCloud() {
+    if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
+        return;
+    }
+    
+    const merchantId = getMerchantId();
+    
+    if (!confirm(`⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة التاجر "${merchantId}" من Drive؟`)) return;
+
+    setLoading(true);
+    try {
+        showToast('☁️ جاري جلب نسختك الخاصة...', 'info');
+        
+        const response = await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            body: JSON.stringify({ 
+                action: 'restore', 
+                merchantId: merchantId 
+            })
+        });
+
+        const text = await response.text();
+        
+        if (text.trim().startsWith('<')) {
+            throw new Error("رد غير صالح من الخادم");
+        }
+
+        const result = JSON.parse(text);
+
+        if (result.status === 'success' && result.data && result.data.backup) {
+            await applyBackupData(result.data.backup);
+            showToast(`✅ تم استعادة نسختك الخاصة بنجاح`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('⚠️ ' + (result.message || 'لا توجد نسخة محفوظة لهذا التاجر'), 'error');
+        }
+    } catch(e) {
+        console.error('خطأ الاستعادة:', e);
+        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+// تطبيق البيانات المستعادة
+async function applyBackupData(backupData) {
+    const storeMap = [
+        { store: productsStore, items: backupData.products },
+        { store: contactsStore, items: backupData.contacts },
+        { store: invoicesStore, items: backupData.invoices },
+        { store: invoiceItemsStore, items: backupData.invoice_items },
+        { store: paymentsStore, items: backupData.payments }
+    ];
+
+    for (const entry of storeMap) {
+        if (entry.items) {
+            await entry.store.clear();
+            for (const item of entry.items) {
+                if (item && item.id) {
+                    await entry.store.setItem(item.id, item);
+                }
+            }
+        }
+    }
+    
+    // تحديث الكاش المحلي
+    if (typeof loadMasterDataFromCache === "function") {
+        await loadMasterDataFromCache();
+    }
+    if (typeof loadData === "function") {
+        await loadData();
+    }
+}
+
+// تصدير نسخة محلية
 async function exportBackup() {
     setLoading(true);
     try {
@@ -3650,79 +3787,7 @@ async function exportBackup() {
     }
 }
 
-// 3. رفع نسخة إلى Drive (معدلة لتعمل مع السكربت المتطور)
-async function backupToDrive() {
-    if (!navigator.onLine) {
-        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
-        return;
-    }
-    setLoading(true);
-    try {
-        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
-        const backup = await getAllProjectData();
-
-        // استخدام POST لإرسال الأكشن والبيانات
-        await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            mode: 'no-cors', // لضمان تجاوز قيود CORS أثناء الرفع
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'upload', backup: backup })
-        });
-
-        // في وضع no-cors نفترض النجاح إذا لم يحدث خطأ في الاتصال
-        showToast('✅ تم إرسال النسخة إلى Drive بنجاح', 'success');
-    } catch(e) {
-        console.error("خطأ الرفع:", e);
-        showToast("❌ فشل الرفع: " + e.message, "error");
-    } finally {
-        setLoading(false);
-    }
-}
-
-// 4. استعادة من Drive (معدلة جذرياً لحل مشكلة "لا توجد نسخة")
-async function restoreFromCloud() {
-    if (!navigator.onLine) {
-        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
-        return;
-    }
-    if (!confirm('⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة Drive؟')) return;
-
-    setLoading(true);
-    try {
-        showToast('☁️ جاري طلب البيانات من Drive...', 'info');
-        
-        // إرسال طلب POST لأن السكربت يعالج الأكشن في doPost
-        const response = await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            redirect: 'follow',
-            body: JSON.stringify({ action: 'restore' })
-        });
-
-        const text = await response.text();
-        
-        // فحص إذا كان الرد HTML (صفحة خطأ من جوجل) لمنع خطأ الـ Token
-        if (text.trim().startsWith('<')) {
-            throw new Error("رد غير صالح من الخادم. تأكد من إعدادات النشر على (Anyone).");
-        }
-
-        const result = JSON.parse(text);
-
-        if (result.status === 'success' && result.data) {
-            await applyBackupData(result.data);
-            showToast(`✅ تم استعادة البيانات بنجاح`, 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('⚠️ ' + (result.message || 'لم يتم العثور على نسخة'), 'error');
-        }
-    } catch(e) {
-        console.error('خطأ الاستعادة:', e);
-        showToast('❌ فشل الاستعادة: تأكد من وجود ملف النسخة في درايف', 'error');
-    } finally {
-        setLoading(false);
-    }
-}
-
-// 5. استعادة من ملف محلي
+// استعادة من ملف محلي
 async function importBackup() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -3747,33 +3812,13 @@ async function importBackup() {
     input.click();
 }
 
-// دالة مساعدة لتطبيق البيانات على المخازن
-async function applyBackupData(data) {
-    const storeMap = [
-        { store: productsStore, items: data.products },
-        { store: contactsStore, items: data.contacts },
-        { store: invoicesStore, items: data.invoices },
-        { store: invoiceItemsStore, items: data.invoice_items },
-        { store: paymentsStore, items: data.payments }
-    ];
-
-    for (const entry of storeMap) {
-        if (entry.items) {
-            await entry.store.clear();
-            for (const item of entry.items) {
-                await entry.store.setItem(item.id, item);
-            }
-        }
-    }
-    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
-}
-
-// ربط الدوال بالمتصفح
+// ربط الدوال
 window.exportBackup = exportBackup;
 window.backupToDrive = backupToDrive;
 window.restoreFromCloud = restoreFromCloud;
 window.importBackup = importBackup;
 
+console.log('✅ نظام النسخ الاحتياطي - كل تاجر له مجلده الخاص');
 
     // ==================== دوال تعديل جهات الاتصال ====================
     function openEditPhoneModal(id, name, type, phone) {
@@ -7812,6 +7857,111 @@ if ('serviceWorker' in navigator) {
     observer.observe(document.body, { childList: true, subtree: true });
 })();
 
+</script>
+<!-- ==================== زر تثبيت التطبيق المباشر ==================== -->
+<script>
+(function() {
+    'use strict';
+    
+    let deferredPrompt = null;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    
+    // إذا كان مثبتاً بالفعل، لا نعرض الزر
+    if (isStandalone) {
+        console.log('✅ التطبيق مثبت بالفعل');
+        return;
+    }
+    
+    // استلام حدث التثبيت من المتصفح
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        showInstallButton();
+    });
+    
+    function showInstallButton() {
+        // إزالة الزر القديم إن وجد
+        const oldBtn = document.getElementById('oneClickInstallBtn');
+        if (oldBtn) oldBtn.remove();
+        
+        // إنشاء الزر
+        const btn = document.createElement('button');
+        btn.id = 'oneClickInstallBtn';
+        btn.innerHTML = '📲 تثبيت التطبيق';
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 25px;
+            left: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #d4af37, #b8860b);
+            color: #000;
+            border: none;
+            padding: 16px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 18px;
+            z-index: 99999;
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            width: calc(100% - 40px);
+            letter-spacing: 1px;
+        `;
+        
+        // عند الضغط على الزر → التثبيت فوراً
+        btn.onclick = async () => {
+            if (!deferredPrompt) {
+                alert('⚠️ المتصفح لا يدعم التثبيت التلقائي');
+                return;
+            }
+            
+            // إظهار نافذة التثبيت الرسمية
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('✅ تم تثبيت التطبيق');
+                btn.remove();
+            } else {
+                console.log('❌ تم الإلغاء');
+            }
+            deferredPrompt = null;
+        };
+        
+        document.body.appendChild(btn);
+    }
+    
+    // إذا لم يظهر حدث التثبيت بعد 5 ثواني (المتصفح لا يدعم)
+    setTimeout(() => {
+        if (!deferredPrompt && !isStandalone) {
+            const btn = document.getElementById('oneClickInstallBtn');
+            if (!btn) {
+                const fallbackBtn = document.createElement('button');
+                fallbackBtn.innerHTML = '⚠️ المتصفح لا يدعم التثبيت التلقائي';
+                fallbackBtn.style.cssText = `
+                    position: fixed;
+                    bottom: 25px;
+                    left: 20px;
+                    right: 20px;
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    padding: 16px;
+                    border-radius: 60px;
+                    font-weight: bold;
+                    font-size: 14px;
+                    z-index: 99999;
+                    text-align: center;
+                    width: calc(100% - 40px);
+                `;
+                fallbackBtn.onclick = () => fallbackBtn.remove();
+                document.body.appendChild(fallbackBtn);
+                setTimeout(() => fallbackBtn.remove(), 8000);
+            }
+        }
+    }, 5000);
+})();
 </script>
 </body>
 </html>
