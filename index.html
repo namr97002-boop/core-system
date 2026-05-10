@@ -5223,24 +5223,186 @@ console.log('✅ نظام مدير النظام - جاهز للعمل');
 
 
 <!-- ==================== زر تثبيت التطبيق ==================== -->
+<!-- ==================== زر تثبيت التطبيق (يعمل على الأندرويد) ==================== -->
 <script>
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (window.matchMedia('(display-mode: standalone)').matches) return;
+(function() {
+    'use strict';
     
-    const btn = document.createElement('button');
-    btn.innerHTML = '📱 تثبيت التطبيق';
-    btn.style.cssText = 'position:fixed;bottom:80px;left:20px;right:20px;background:linear-gradient(145deg,#d4af37,#b38b2d);color:#000;border:none;padding:15px;border-radius:50px;font-weight:bold;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:pointer;font-family:Tajawal,sans-serif;text-align:center;';
-    btn.onclick = async () => {
-        if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
-        btn.remove();
-    };
-    document.body.appendChild(btn);
-    setTimeout(() => { if (btn.parentNode) btn.remove(); }, 15000);
-});
-window.addEventListener('appinstalled', () => { console.log('✅ تم التثبيت'); });
+    let deferredPrompt = null;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    
+    // إذا كان مثبتاً بالفعل، لا نعرض الزر
+    if (isStandalone) {
+        console.log('✅ التطبيق مثبت بالفعل');
+        return;
+    }
+    
+    // الاستماع لحدث التثبيت
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        showInstallButton();
+    });
+    
+    function showInstallButton() {
+        // إزالة الزر القديم إن وجد
+        const oldBtn = document.getElementById('customInstallBtn');
+        if (oldBtn) oldBtn.remove();
+        
+        // إنشاء الزر
+        const btn = document.createElement('button');
+        btn.id = 'customInstallBtn';
+        btn.innerHTML = '📲 تثبيت التطبيق على الجهاز';
+        btn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #d4af37, #b8860b);
+            color: #000;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 16px;
+            z-index: 99999;
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            animation: pulse 1.5s infinite;
+            width: auto;
+            min-width: 250px;
+            letter-spacing: 1px;
+        `;
+        
+        // زر الإغلاق (X)
+        const closeBtn = document.createElement('span');
+        closeBtn.innerHTML = '✕';
+        closeBtn.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ef4444;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        `;
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            btn.remove();
+        };
+        
+        btn.appendChild(closeBtn);
+        
+        btn.onclick = async () => {
+            if (!deferredPrompt) {
+                // إذا لم يظهر الحدث، نعرض تعليمات بديلة
+                showManualInstructions();
+                return;
+            }
+            
+            // إظهار نافذة التثبيت
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('✅ تم تثبيت التطبيق');
+                btn.remove();
+            } else {
+                console.log('❌ تم رفض التثبيت');
+            }
+            deferredPrompt = null;
+        };
+        
+        document.body.appendChild(btn);
+        
+        // إضافة حركة نبض
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+                70% { transform: translateX(-50%) scale(1.05); box-shadow: 0 0 0 15px rgba(212, 175, 55, 0); }
+                100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    function showManualInstructions() {
+        // نافذة تعليمات منبثقة
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 100000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Tajawal', sans-serif;
+        `;
+        modal.innerHTML = `
+            <div style="background: #1a1a2e; border: 2px solid #d4af37; border-radius: 20px; padding: 25px; max-width: 300px; text-align: center; color: white;">
+                <h2 style="color: #d4af37; margin-bottom: 15px;">📱 تثبيت التطبيق</h2>
+                <p style="margin-bottom: 20px; line-height: 1.6;">اضغط على القائمة (⠇) في المتصفح ثم اختر <strong style="color:#d4af37;">"تثبيت التطبيق"</strong> أو <strong style="color:#d4af37;">"Install App"</strong></p>
+                <button id="closeManualBtn" style="background: #d4af37; color: #000; border: none; padding: 12px 25px; border-radius: 40px; font-weight: bold; font-size: 16px; cursor: pointer;">فهمت ✅</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('closeManualBtn').onclick = () => modal.remove();
+    }
+    
+    // لو لم يظهر beforeinstallprompt بعد 5 ثواني، نعرض التعليمات
+    setTimeout(() => {
+        if (!deferredPrompt && !isStandalone) {
+            showInstallButtonManual();
+        }
+    }, 3000);
+    
+    function showInstallButtonManual() {
+        const btn = document.getElementById('customInstallBtn');
+        if (btn) return;
+        
+        const manualBtn = document.createElement('button');
+        manualBtn.innerHTML = '📱 اضغط هنا لتثبيت التطبيق';
+        manualBtn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #d4af37, #b8860b);
+            color: #000;
+            border: none;
+            padding: 14px 25px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 99999;
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            text-align: center;
+            width: auto;
+            min-width: 220px;
+        `;
+        manualBtn.onclick = showManualInstructions;
+        document.body.appendChild(manualBtn);
+        
+        setTimeout(() => {
+            if (manualBtn.parentNode) manualBtn.remove();
+        }, 15000);
+    }
+})();
 </script>
 
 <!-- ==================== تحسينات ==================== -->
@@ -7649,6 +7811,7 @@ if ('serviceWorker' in navigator) {
     
     observer.observe(document.body, { childList: true, subtree: true });
 })();
+
 </script>
 </body>
 </html>
