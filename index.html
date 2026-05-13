@@ -7,7 +7,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>محلات  للتجارة العامة</title>
-    
+    <!-- ==================== PWA للتثبيت والعمل بدون نت ==================== -->
+<link rel="manifest" href="./manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="محلات">
+<link rel="apple-touch-icon" href="https://i.postimg.cc/9QLJBVcJ/1777228627401.png">
     <!-- ==================== PWA MANIFEST ==================== -->
 
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3599,28 +3604,10 @@ if (activeMode === 'credit' && sendSMS && selectedContactPhone) {
     }
 // ==================== دوال النسخ الاحتياطي المصححة والكاملة ====================
 
-// ==================== النسخ الاحتياطي لكل تاجر على حدة (متوافق مع السكربت الخلفي) ====================
-const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbzTbi9mJCHSdWGGqnhqg1dr_F84MQj8zPmrTuX8PDSOm17ldOwXrCHBn30BPW0Rxl72/exec';
+// 1. تعريف الرابط (تأكد أنه لا يتكرر في مكان آخر في ملفك)
+const CLOUD_API_URL = 'https://script.google.com/macros/s/AKfycbxsG_fdB_Qx71tV2Hh3GZ1iUtFwQqtRuMMP8564GD74mcbDXiUZEbGpgrmOXzTjc_VK/exec';
 
-// الحصول على معرف فريد للتاجر (رقم الجوال)
-function getMerchantId() {
-    let merchantId = localStorage.getItem('merchant_phone');
-    
-    if (!merchantId) {
-        merchantId = prompt('📱 يرجى إدخال رقم جوالك (لحفظ نسختك الخاصة):', '05XXXXXXXX');
-        if (merchantId && merchantId.trim() !== '') {
-            localStorage.setItem('merchant_phone', merchantId.trim());
-        } else {
-            // إذا لم يدخل رقم، نستخدم اسم المحل كمعرف
-            merchantId = localStorage.getItem('storeName') || 'unknown_store';
-            merchantId = merchantId.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_').substring(0, 50);
-        }
-    }
-    
-    return merchantId;
-}
-
-// جلب جميع البيانات من التخزين
+// دالة مساعدة لجلب كافة البيانات من التخزين المحلي
 async function getAllProjectData() {
     const getAllFromStore = async (store) => {
         const keys = await store.keys();
@@ -3647,126 +3634,7 @@ async function getAllProjectData() {
     };
 }
 
-// رفع النسخة إلى Drive (كل تاجر له مجلده الخاص)
-async function backupToDrive() {
-    if (!navigator.onLine) {
-        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
-        return;
-    }
-    
-    setLoading(true);
-    try {
-        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
-        
-        const merchantId = getMerchantId();
-        const backup = await getAllProjectData();
-        const fileName = `backup_${merchantId}_${new Date().toISOString().split('T')[0]}.json`;
-        
-        // إرسال البيانات بنفس تنسيق السكربت الخلفي
-        const response = await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                action: 'upload',
-                merchantId: merchantId,
-                fileName: fileName,
-                backup: backup
-            })
-        });
-        
-        showToast(`✅ تم حفظ نسختك الخاصة بنجاح`, 'success');
-        
-        // تحديث وقت آخر نسخة احتياطية
-        localStorage.setItem('last_backup_date', new Date().toISOString());
-        localStorage.setItem('last_backup_merchant', merchantId);
-        
-    } catch(e) {
-        console.error("خطأ الرفع:", e);
-        showToast("❌ فشل الرفع: " + e.message, "error");
-    } finally {
-        setLoading(false);
-    }
-}
-
-// استعادة النسخة من Drive (تجلب نسخة التاجر فقط)
-async function restoreFromCloud() {
-    if (!navigator.onLine) {
-        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
-        return;
-    }
-    
-    const merchantId = getMerchantId();
-    
-    if (!confirm(`⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة التاجر "${merchantId}" من Drive؟`)) return;
-
-    setLoading(true);
-    try {
-        showToast('☁️ جاري جلب نسختك الخاصة...', 'info');
-        
-        const response = await fetch(CLOUD_API_URL, {
-            method: 'POST',
-            redirect: 'follow',
-            body: JSON.stringify({ 
-                action: 'restore', 
-                merchantId: merchantId 
-            })
-        });
-
-        const text = await response.text();
-        
-        if (text.trim().startsWith('<')) {
-            throw new Error("رد غير صالح من الخادم");
-        }
-
-        const result = JSON.parse(text);
-
-        if (result.status === 'success' && result.data && result.data.backup) {
-            await applyBackupData(result.data.backup);
-            showToast(`✅ تم استعادة نسختك الخاصة بنجاح`, 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('⚠️ ' + (result.message || 'لا توجد نسخة محفوظة لهذا التاجر'), 'error');
-        }
-    } catch(e) {
-        console.error('خطأ الاستعادة:', e);
-        showToast('❌ فشل الاستعادة: ' + e.message, 'error');
-    } finally {
-        setLoading(false);
-    }
-}
-
-// تطبيق البيانات المستعادة
-async function applyBackupData(backupData) {
-    const storeMap = [
-        { store: productsStore, items: backupData.products },
-        { store: contactsStore, items: backupData.contacts },
-        { store: invoicesStore, items: backupData.invoices },
-        { store: invoiceItemsStore, items: backupData.invoice_items },
-        { store: paymentsStore, items: backupData.payments }
-    ];
-
-    for (const entry of storeMap) {
-        if (entry.items) {
-            await entry.store.clear();
-            for (const item of entry.items) {
-                if (item && item.id) {
-                    await entry.store.setItem(item.id, item);
-                }
-            }
-        }
-    }
-    
-    // تحديث الكاش المحلي
-    if (typeof loadMasterDataFromCache === "function") {
-        await loadMasterDataFromCache();
-    }
-    if (typeof loadData === "function") {
-        await loadData();
-    }
-}
-
-// تصدير نسخة محلية
+// 2. تصدير نسخة احتياطية محلية (ملف JSON)
 async function exportBackup() {
     setLoading(true);
     try {
@@ -3787,7 +3655,79 @@ async function exportBackup() {
     }
 }
 
-// استعادة من ملف محلي
+// 3. رفع نسخة إلى Drive (معدلة لتعمل مع السكربت المتطور)
+async function backupToDrive() {
+    if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
+        return;
+    }
+    setLoading(true);
+    try {
+        showToast('📦 جاري تجهيز البيانات للرفع...', 'info');
+        const backup = await getAllProjectData();
+
+        // استخدام POST لإرسال الأكشن والبيانات
+        await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            mode: 'no-cors', // لضمان تجاوز قيود CORS أثناء الرفع
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'upload', backup: backup })
+        });
+
+        // في وضع no-cors نفترض النجاح إذا لم يحدث خطأ في الاتصال
+        showToast('✅ تم إرسال النسخة إلى Drive بنجاح', 'success');
+    } catch(e) {
+        console.error("خطأ الرفع:", e);
+        showToast("❌ فشل الرفع: " + e.message, "error");
+    } finally {
+        setLoading(false);
+    }
+}
+
+// 4. استعادة من Drive (معدلة جذرياً لحل مشكلة "لا توجد نسخة")
+async function restoreFromCloud() {
+    if (!navigator.onLine) {
+        showToast('⚠️ لا يوجد اتصال بالإنترنت', 'error');
+        return;
+    }
+    if (!confirm('⚠️ تحذير: سيتم حذف البيانات الحالية واستبدالها بنسخة Drive؟')) return;
+
+    setLoading(true);
+    try {
+        showToast('☁️ جاري طلب البيانات من Drive...', 'info');
+        
+        // إرسال طلب POST لأن السكربت يعالج الأكشن في doPost
+        const response = await fetch(CLOUD_API_URL, {
+            method: 'POST',
+            redirect: 'follow',
+            body: JSON.stringify({ action: 'restore' })
+        });
+
+        const text = await response.text();
+        
+        // فحص إذا كان الرد HTML (صفحة خطأ من جوجل) لمنع خطأ الـ Token
+        if (text.trim().startsWith('<')) {
+            throw new Error("رد غير صالح من الخادم. تأكد من إعدادات النشر على (Anyone).");
+        }
+
+        const result = JSON.parse(text);
+
+        if (result.status === 'success' && result.data) {
+            await applyBackupData(result.data);
+            showToast(`✅ تم استعادة البيانات بنجاح`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('⚠️ ' + (result.message || 'لم يتم العثور على نسخة'), 'error');
+        }
+    } catch(e) {
+        console.error('خطأ الاستعادة:', e);
+        showToast('❌ فشل الاستعادة: تأكد من وجود ملف النسخة في درايف', 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+// 5. استعادة من ملف محلي
 async function importBackup() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -3812,13 +3752,33 @@ async function importBackup() {
     input.click();
 }
 
-// ربط الدوال
+// دالة مساعدة لتطبيق البيانات على المخازن
+async function applyBackupData(data) {
+    const storeMap = [
+        { store: productsStore, items: data.products },
+        { store: contactsStore, items: data.contacts },
+        { store: invoicesStore, items: data.invoices },
+        { store: invoiceItemsStore, items: data.invoice_items },
+        { store: paymentsStore, items: data.payments }
+    ];
+
+    for (const entry of storeMap) {
+        if (entry.items) {
+            await entry.store.clear();
+            for (const item of entry.items) {
+                await entry.store.setItem(item.id, item);
+            }
+        }
+    }
+    if (typeof loadMasterDataFromCache === "function") await loadMasterDataFromCache();
+}
+
+// ربط الدوال بالمتصفح
 window.exportBackup = exportBackup;
 window.backupToDrive = backupToDrive;
 window.restoreFromCloud = restoreFromCloud;
 window.importBackup = importBackup;
 
-console.log('✅ نظام النسخ الاحتياطي - كل تاجر له مجلده الخاص');
 
     // ==================== دوال تعديل جهات الاتصال ====================
     function openEditPhoneModal(id, name, type, phone) {
@@ -5268,186 +5228,24 @@ console.log('✅ نظام مدير النظام - جاهز للعمل');
 
 
 <!-- ==================== زر تثبيت التطبيق ==================== -->
-<!-- ==================== زر تثبيت التطبيق (يعمل على الأندرويد) ==================== -->
 <script>
-(function() {
-    'use strict';
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
     
-    let deferredPrompt = null;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    
-    // إذا كان مثبتاً بالفعل، لا نعرض الزر
-    if (isStandalone) {
-        console.log('✅ التطبيق مثبت بالفعل');
-        return;
-    }
-    
-    // الاستماع لحدث التثبيت
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        showInstallButton();
-    });
-    
-    function showInstallButton() {
-        // إزالة الزر القديم إن وجد
-        const oldBtn = document.getElementById('customInstallBtn');
-        if (oldBtn) oldBtn.remove();
-        
-        // إنشاء الزر
-        const btn = document.createElement('button');
-        btn.id = 'customInstallBtn';
-        btn.innerHTML = '📲 تثبيت التطبيق على الجهاز';
-        btn.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #d4af37, #b8860b);
-            color: #000;
-            border: none;
-            padding: 14px 28px;
-            border-radius: 60px;
-            font-weight: bold;
-            font-size: 16px;
-            z-index: 99999;
-            cursor: pointer;
-            font-family: 'Tajawal', sans-serif;
-            text-align: center;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-            animation: pulse 1.5s infinite;
-            width: auto;
-            min-width: 250px;
-            letter-spacing: 1px;
-        `;
-        
-        // زر الإغلاق (X)
-        const closeBtn = document.createElement('span');
-        closeBtn.innerHTML = '✕';
-        closeBtn.style.cssText = `
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #ef4444;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        `;
-        closeBtn.onclick = (e) => {
-            e.stopPropagation();
-            btn.remove();
-        };
-        
-        btn.appendChild(closeBtn);
-        
-        btn.onclick = async () => {
-            if (!deferredPrompt) {
-                // إذا لم يظهر الحدث، نعرض تعليمات بديلة
-                showManualInstructions();
-                return;
-            }
-            
-            // إظهار نافذة التثبيت
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            
-            if (outcome === 'accepted') {
-                console.log('✅ تم تثبيت التطبيق');
-                btn.remove();
-            } else {
-                console.log('❌ تم رفض التثبيت');
-            }
-            deferredPrompt = null;
-        };
-        
-        document.body.appendChild(btn);
-        
-        // إضافة حركة نبض
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes pulse {
-                0% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
-                70% { transform: translateX(-50%) scale(1.05); box-shadow: 0 0 0 15px rgba(212, 175, 55, 0); }
-                100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    
-    function showManualInstructions() {
-        // نافذة تعليمات منبثقة
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
-            z-index: 100000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: 'Tajawal', sans-serif;
-        `;
-        modal.innerHTML = `
-            <div style="background: #1a1a2e; border: 2px solid #d4af37; border-radius: 20px; padding: 25px; max-width: 300px; text-align: center; color: white;">
-                <h2 style="color: #d4af37; margin-bottom: 15px;">📱 تثبيت التطبيق</h2>
-                <p style="margin-bottom: 20px; line-height: 1.6;">اضغط على القائمة (⠇) في المتصفح ثم اختر <strong style="color:#d4af37;">"تثبيت التطبيق"</strong> أو <strong style="color:#d4af37;">"Install App"</strong></p>
-                <button id="closeManualBtn" style="background: #d4af37; color: #000; border: none; padding: 12px 25px; border-radius: 40px; font-weight: bold; font-size: 16px; cursor: pointer;">فهمت ✅</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        document.getElementById('closeManualBtn').onclick = () => modal.remove();
-    }
-    
-    // لو لم يظهر beforeinstallprompt بعد 5 ثواني، نعرض التعليمات
-    setTimeout(() => {
-        if (!deferredPrompt && !isStandalone) {
-            showInstallButtonManual();
-        }
-    }, 3000);
-    
-    function showInstallButtonManual() {
-        const btn = document.getElementById('customInstallBtn');
-        if (btn) return;
-        
-        const manualBtn = document.createElement('button');
-        manualBtn.innerHTML = '📱 اضغط هنا لتثبيت التطبيق';
-        manualBtn.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #d4af37, #b8860b);
-            color: #000;
-            border: none;
-            padding: 14px 25px;
-            border-radius: 60px;
-            font-weight: bold;
-            font-size: 14px;
-            z-index: 99999;
-            cursor: pointer;
-            font-family: 'Tajawal', sans-serif;
-            text-align: center;
-            width: auto;
-            min-width: 220px;
-        `;
-        manualBtn.onclick = showManualInstructions;
-        document.body.appendChild(manualBtn);
-        
-        setTimeout(() => {
-            if (manualBtn.parentNode) manualBtn.remove();
-        }, 15000);
-    }
-})();
+    const btn = document.createElement('button');
+    btn.innerHTML = '📱 تثبيت التطبيق';
+    btn.style.cssText = 'position:fixed;bottom:80px;left:20px;right:20px;background:linear-gradient(145deg,#d4af37,#b38b2d);color:#000;border:none;padding:15px;border-radius:50px;font-weight:bold;font-size:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);cursor:pointer;font-family:Tajawal,sans-serif;text-align:center;';
+    btn.onclick = async () => {
+        if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; }
+        btn.remove();
+    };
+    document.body.appendChild(btn);
+    setTimeout(() => { if (btn.parentNode) btn.remove(); }, 15000);
+});
+window.addEventListener('appinstalled', () => { console.log('✅ تم التثبيت'); });
 </script>
 
 <!-- ==================== تحسينات ==================== -->
@@ -7856,23 +7654,12 @@ if ('serviceWorker' in navigator) {
     
     observer.observe(document.body, { childList: true, subtree: true });
 })();
-
 </script>
-<!-- ==================== زر تثبيت التطبيق المباشر ==================== -->
+<!-- زر تثبيت التطبيق -->
 <script>
 (function() {
-    'use strict';
+    let deferredPrompt;
     
-    let deferredPrompt = null;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    
-    // إذا كان مثبتاً بالفعل، لا نعرض الزر
-    if (isStandalone) {
-        console.log('✅ التطبيق مثبت بالفعل');
-        return;
-    }
-    
-    // استلام حدث التثبيت من المتصفح
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -7880,88 +7667,53 @@ if ('serviceWorker' in navigator) {
     });
     
     function showInstallButton() {
-        // إزالة الزر القديم إن وجد
-        const oldBtn = document.getElementById('oneClickInstallBtn');
-        if (oldBtn) oldBtn.remove();
+        if (document.getElementById('installBtn')) return;
         
-        // إنشاء الزر
         const btn = document.createElement('button');
-        btn.id = 'oneClickInstallBtn';
-        btn.innerHTML = '📲 تثبيت التطبيق';
+        btn.id = 'installBtn';
+        btn.innerHTML = '📱 تثبيت التطبيق';
         btn.style.cssText = `
             position: fixed;
-            bottom: 25px;
-            left: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #d4af37, #b8860b);
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #d4af37;
             color: #000;
             border: none;
-            padding: 16px;
-            border-radius: 60px;
+            padding: 14px 25px;
+            border-radius: 50px;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 16px;
             z-index: 99999;
             cursor: pointer;
-            font-family: 'Tajawal', sans-serif;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            width: calc(100% - 40px);
-            letter-spacing: 1px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            animation: blink 1s infinite;
         `;
         
-        // عند الضغط على الزر → التثبيت فوراً
-        btn.onclick = async () => {
-            if (!deferredPrompt) {
-                alert('⚠️ المتصفح لا يدعم التثبيت التلقائي');
-                return;
+        btn.onclick = () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => btn.remove());
             }
-            
-            // إظهار نافذة التثبيت الرسمية
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            
-            if (outcome === 'accepted') {
-                console.log('✅ تم تثبيت التطبيق');
-                btn.remove();
-            } else {
-                console.log('❌ تم الإلغاء');
-            }
-            deferredPrompt = null;
         };
         
         document.body.appendChild(btn);
     }
     
-    // إذا لم يظهر حدث التثبيت بعد 5 ثواني (المتصفح لا يدعم)
-    setTimeout(() => {
-        if (!deferredPrompt && !isStandalone) {
-            const btn = document.getElementById('oneClickInstallBtn');
-            if (!btn) {
-                const fallbackBtn = document.createElement('button');
-                fallbackBtn.innerHTML = '⚠️ المتصفح لا يدعم التثبيت التلقائي';
-                fallbackBtn.style.cssText = `
-                    position: fixed;
-                    bottom: 25px;
-                    left: 20px;
-                    right: 20px;
-                    background: #ef4444;
-                    color: white;
-                    border: none;
-                    padding: 16px;
-                    border-radius: 60px;
-                    font-weight: bold;
-                    font-size: 14px;
-                    z-index: 99999;
-                    text-align: center;
-                    width: calc(100% - 40px);
-                `;
-                fallbackBtn.onclick = () => fallbackBtn.remove();
-                document.body.appendChild(fallbackBtn);
-                setTimeout(() => fallbackBtn.remove(), 8000);
-            }
-        }
-    }, 5000);
+    // تسجيل Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+            .then(() => console.log('✅ SW registered'))
+            .catch(err => console.log('SW error:', err));
+    }
 })();
 </script>
+
+<style>
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; transform: translateX(-50%) scale(1.02); }
+    }
+</style>
 </body>
 </html>
